@@ -70,6 +70,13 @@ Vollständige Übersicht aller Anforderungen aus **BSI IT-Grundschutz SYS.2.2.3
 | SiSyPHuS / SID | Anonyme SID-Enumeration verbieten | Automatisiert | `bsi/bsi-registry.ps1` | Umgesetzt | `RestrictAnonymousSAM = 1`, `RestrictAnonymous = 1` |
 | SiSyPHuS / NTLM | NTLMv2-only erzwingen, LM-Hashes deaktivieren | Automatisiert | `bsi/bsi-registry.ps1` | Umgesetzt | `LmCompatibilityLevel = 5`, `NoLMHash = 1` |
 | SiSyPHuS / UAC | UAC auf höchste Stufe setzen | Automatisiert | `bsi/bsi-registry.ps1` | Umgesetzt | Sicherer Desktop, Admin-Zustimmung |
+| SiSyPHuS / Explorer | Dateiendungen im Explorer anzeigen | Automatisiert | `bsi/bsi-registry.ps1` | Umgesetzt | `HideFileExt = 0` (HKCU); Hinweis: per-user, gilt für ausführenden Benutzer |
+| SYS.2.2.3 / RDP | RDP-Härtung (NLA + TLS, RDP bleibt aktiv) | Automatisiert | `bsi/bsi-registry.ps1` | Umgesetzt | NLA, SecurityLayer=2 (TLS), MinEncryptionLevel=3 |
+| SYS.2.2.3.A14 / LSA | LSA Protection (RunAsPPL) | Automatisiert | `bsi/bsi-registry.ps1` | Umgesetzt | Schützt lsass.exe vor Credential-Dumps; Neustart erforderlich |
+| SYS.2.2.3.A3 / Cache | Cached Logons einschränken | Automatisiert | `bsi/bsi-registry.ps1` | Umgesetzt | `CachedLogonsCount = 1` (REG_SZ) |
+| SiSyPHuS / PS-Log | PowerShell Script Block Logging | Automatisiert | `bsi/bsi-registry.ps1` | Umgesetzt | Event-ID 4104; Erkennung von PS-Malware |
+| SiSyPHuS / Teredo | Teredo (IPv6-Tunnel) deaktivieren | Automatisiert | `bsi/bsi-registry.ps1` | Umgesetzt | Verhindert Firewall-Umgehung via IPv6-Tunnel |
+| SiSyPHuS / WPAD | WPAD deaktivieren | Automatisiert | `bsi/bsi-registry.ps1` | Umgesetzt | MITM-Schutz; AutoDetect=0 (HKCU + HKLM-Policy) |
 | CON.3 | Datensicherungskonzept | Manuell | - | Offen | Backup-Strategie 3-2-1; Wiederherstellungstest; siehe `bsi-nicht-automatisiert.md` |
 | ORP.3 | Nutzerschulung | Manuell | - | Offen | Phishing, Passwörter, Meldewege; regelmäßige Schulungen |
 | INF.8 | Physische Sicherheit | Manuell | - | Offen | Zutrittsschutz, Secure Boot, BIOS-Passwort; siehe `bsi-nicht-automatisiert.md` |
@@ -84,8 +91,8 @@ Vollständige Übersicht aller Anforderungen aus **BSI IT-Grundschutz SYS.2.2.3
 | Basis-Anforderungen (A1–A8) | 8 | 1 | 5 | 0 |
 | Standard-Anforderungen (A9–A20) | 12 | 1 | 10 | 1 |
 | Erhöhte Anforderungen (A21–A27) | 7 | 0 | 5 | 2 |
-| SiSyPHuS / übergreifend | 11 | 8 | 3 | 0 |
-| **Gesamt** | **38** | **10** | **23** | **3** |
+| SiSyPHuS / übergreifend | 18 | 15 | 3 | 0 |
+| **Gesamt** | **45** | **17** | **25** | **3** |
 
 > **Hinweis:** "Teilweise automatisiert" zählt als "Offen", da manuelle Schritte fehlen.
 > Ziel ist es, den Status aller offenen Punkte sukzessive auf "Umgesetzt" zu bringen.
