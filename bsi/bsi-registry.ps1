@@ -354,6 +354,144 @@ Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
     -Description 'Telemetrie auf Minimum (0=Security) reduzieren'
 
 
+
+# =============================================================================
+# 14. DATEIENDUNGEN IM EXPLORER IMMER ANZEIGEN
+# BSI: SYS.2.2.3.A4; SiSyPHuS Win10 Kap. 5
+# Beschreibung: Windows blendet standardmäßig Dateiendungen bekannter Dateitypen
+#               aus. Angreifer nutzen dies, um Schadsoftware als harmlose Datei
+#               zu tarnen (z. B. "rechnung.pdf.exe" erscheint als "rechnung.pdf").
+# Hinweis: HKCU-Einstellung – gilt für den Benutzer, der dieses Skript ausführt.
+#          Für neue Benutzerkonten: Einstellung im Default-Profil setzen (DISM/GPO).
+# Rollback: HideFileExt = 1 (Dateiendungen ausblenden, Windows-Standard)
+# =============================================================================
+Set-RegValue -Path 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced' `
+    -Name  'HideFileExt' `
+    -Value 0 `
+    -Ref   'SYS.2.2.3.A4' `
+    -Description 'Dateiendungen im Explorer immer anzeigen (HKCU)'
+
+
+# =============================================================================
+# 15. RDP-HÄRTUNG (NLA + TLS + VERSCHLÜSSELUNG)
+# BSI: SYS.2.2.3.A8; SiSyPHuS Win10 Kap. 8
+# Beschreibung: RDP bleibt aktiviert, wird aber auf sichere Authentifizierung
+#               und Verschlüsselung gezwungen:
+#               - UserAuthentication = 1: Network Level Authentication (NLA)
+#                 erzwingt Vorauthentifizierung VOR dem Desktop-Zugriff.
+#               - SecurityLayer = 2: TLS statt des schwächeren RDP-Eigenprotokolls.
+#               - MinEncryptionLevel = 3: Nur High-Encryption (128-Bit) erlaubt.
+# Rollback: UserAuthentication=0, SecurityLayer=0, MinEncryptionLevel=1
+# =============================================================================
+$rdpPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
+
+Set-RegValue -Path $rdpPath `
+    -Name  'UserAuthentication' `
+    -Value 1 `
+    -Ref   'SYS.2.2.3.A8' `
+    -Description 'RDP: Network Level Authentication (NLA) erzwingen'
+
+Set-RegValue -Path $rdpPath `
+    -Name  'SecurityLayer' `
+    -Value 2 `
+    -Ref   'SYS.2.2.3.A8' `
+    -Description 'RDP: TLS als Sicherheitsebene erzwingen (2=SSL/TLS)'
+
+Set-RegValue -Path $rdpPath `
+    -Name  'MinEncryptionLevel' `
+    -Value 3 `
+    -Ref   'SYS.2.2.3.A8' `
+    -Description 'RDP: Mindestverschlüsselung auf High (128-Bit) setzen'
+
+
+# =============================================================================
+# 16. LSA PROTECTION (RUNASPPL)
+# BSI: SYS.2.2.3.A14; SiSyPHuS Win10 Kap. 6
+# Beschreibung: Aktiviert den Protected Process Light-Modus für lsass.exe.
+#               Verhindert, dass nicht-signierte Treiber und Tools (z. B. Mimikatz)
+#               Credentials direkt aus dem LSASS-Prozessspeicher auslesen können.
+# Voraussetzung: Neustart erforderlich. Auf Systemen ohne Secure Boot vor
+#               Aktivierung prüfen, ob Treiber-Kompatibilität gewährleistet ist.
+# Rollback: RunAsPPL = 0 (kein LSA-Schutz)
+# =============================================================================
+Set-RegValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Lsa' `
+    -Name  'RunAsPPL' `
+    -Value 1 `
+    -Ref   'SYS.2.2.3.A14' `
+    -Description 'LSA Protection: lsass.exe als Protected Process Light starten'
+
+
+# =============================================================================
+# 17. CACHED LOGONS EINSCHRÄNKEN
+# BSI: SYS.2.2.3.A3; SiSyPHuS Win10 Kap. 7
+# Beschreibung: Windows cached standardmäßig 10 Anmeldeinformationen lokal,
+#               damit Benutzer sich auch ohne Domäne anmelden können.
+#               Auf 1 reduzieren minimiert den Angriffsvector bei physischem Zugriff.
+# Hinweis: Wert ist REG_SZ (String), nicht DWORD!
+# Rollback: CachedLogonsCount = "10" (Windows-Standard)
+# =============================================================================
+Set-RegValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' `
+    -Name  'CachedLogonsCount' `
+    -Value '1' `
+    -Type  'String' `
+    -Ref   'SYS.2.2.3.A3' `
+    -Description 'Gecachte Anmeldeinformationen auf maximal 1 begrenzen'
+
+
+# =============================================================================
+# 18. POWERSHELL SCRIPT BLOCK LOGGING AKTIVIEREN
+# BSI: SiSyPHuS Win10 Kap. 9; BSI OPS.1.1
+# Beschreibung: Protokolliert jeden ausgeführten PowerShell-Codeblock im
+#               Windows-Event-Log (Event-ID 4104, Provider: Microsoft-Windows-
+#               PowerShell/Operational). Essenziell zur Erkennung und
+#               forensischen Analyse von PS-basierter Malware und Living-off-the-Land-Angriffen.
+# Rollback: EnableScriptBlockLogging = 0
+# =============================================================================
+Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging' `
+    -Name  'EnableScriptBlockLogging' `
+    -Value 1 `
+    -Ref   'SiSyPHuS/PS-Logging' `
+    -Description 'PowerShell Script Block Logging in Event-Log aktivieren (Event 4104)'
+
+
+# =============================================================================
+# 19. TEREDO DEAKTIVIEREN
+# BSI: SiSyPHuS Win10 Kap. 8
+# Beschreibung: Teredo ist ein IPv6-Tunneling-Protokoll über UDP/IPv4. Es kann
+#               genutzt werden, um IPv4-Firewallregeln zu umgehen, da IPv6-Traffic
+#               oft nicht gesondert gefiltert wird. Deaktivieren wenn IPv6-Konnektivität
+#               nicht explizit über Teredo benötigt wird.
+# Rollback: Teredo_State = "Default" oder Schlüssel löschen
+# =============================================================================
+Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\TCPIP\v6Transition' `
+    -Name  'Teredo_State' `
+    -Value 'Disabled' `
+    -Type  'String' `
+    -Ref   'SiSyPHuS/Teredo' `
+    -Description 'Teredo IPv6-Tunnel deaktivieren (Firewall-Umgehung verhindern)'
+
+
+# =============================================================================
+# 20. WPAD (WEB PROXY AUTO DISCOVERY) DEAKTIVIEREN
+# BSI: SiSyPHuS Win10 Kap. 8
+# Beschreibung: WPAD ermöglicht automatische Proxy-Konfiguration über das Netzwerk.
+#               In unsicheren Netzen kann WPAD für MITM-Angriffe (WPAD-Spoofing)
+#               missbraucht werden. Deaktivieren wenn kein automatischer Proxy benötigt.
+# Rollback: EnableAutoProxyResultCache = 1, AutoDetect = 1
+# =============================================================================
+Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CurrentVersion\Internet Settings' `
+    -Name  'EnableAutoProxyResultCache' `
+    -Value 0 `
+    -Ref   'SiSyPHuS/WPAD' `
+    -Description 'WPAD-Proxy-Cache deaktivieren (HKLM-Policy)'
+
+Set-RegValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings' `
+    -Name  'AutoDetect' `
+    -Value 0 `
+    -Ref   'SiSyPHuS/WPAD' `
+    -Description 'Automatische Proxy-Erkennung (WPAD) für aktuellen Benutzer deaktivieren'
+
+
 # =============================================================================
 Write-Log "FERTIG bsi-registry.ps1"
 Write-Log "=========================================================="
