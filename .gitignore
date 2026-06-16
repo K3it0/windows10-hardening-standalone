@@ -1,0 +1,17 @@
+# Logs und Backup-Dateien nicht ins Repository
+*.log
+*.cfg
+*.bak
+
+# LGPO-Backup-Ordner
+GPO-Backup-*/
+
+# Windows-spezifisch
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editor-Metadaten
+.vscode/
+*.suo
+*.user
