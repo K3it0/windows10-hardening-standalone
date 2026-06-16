@@ -356,20 +356,102 @@ Set-RegValue -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' `
 
 
 # =============================================================================
-# 14. DATEIENDUNGEN IM EXPLORER IMMER ANZEIGEN
+# 14. DATEIENDUNGEN IM EXPLORER IMMER ANZEIGEN – ALLE BENUTZER
 # BSI: SYS.2.2.3.A4; SiSyPHuS Win10 Kap. 5
 # Beschreibung: Windows blendet standardmäßig Dateiendungen bekannter Dateitypen
 #               aus. Angreifer nutzen dies, um Schadsoftware als harmlose Datei
 #               zu tarnen (z. B. "rechnung.pdf.exe" erscheint als "rechnung.pdf").
-# Hinweis: HKCU-Einstellung – gilt für den Benutzer, der dieses Skript ausführt.
-#          Für neue Benutzerkonten: Einstellung im Default-Profil setzen (DISM/GPO).
+#               Gilt für:
+#               a) Alle bestehenden Benutzerprofile (geladene + ungeladene Hives)
+#               b) Neue Benutzerkonten (Default-User-Hive)
 # Rollback: HideFileExt = 1 (Dateiendungen ausblenden, Windows-Standard)
 # =============================================================================
-Set-RegValue -Path 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced' `
+$explorerAdvKey = 'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+$explorerAdvPS  = "SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+
+# --- a) Aktuellen Benutzer (HKCU, immer geladen) ---
+Set-RegValue -Path "HKCU:\$explorerAdvPS" `
     -Name  'HideFileExt' `
     -Value 0 `
     -Ref   'SYS.2.2.3.A4' `
-    -Description 'Dateiendungen im Explorer immer anzeigen (HKCU)'
+    -Description 'Dateiendungen anzeigen – aktueller Benutzer (HKCU)'
+
+# --- b) Alle bestehenden Benutzerprofile ---
+$profileListPath = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList'
+$profiles = Get-ChildItem -Path $profileListPath |
+    Where-Object { $_.PSChildName -match '^S-1-5-21-' } # Nur echte Benutzer-SIDs
+
+foreach ($profile in $profiles) {
+    $sid         = $profile.PSChildName
+    $profilePath = (Get-ItemProperty -Path $profile.PSPath).ProfileImagePath
+    $ntUserDat   = "$profilePath\NTUSER.DAT"
+    $hiveMounted = $false
+
+    # Prüfen ob der Hive bereits in HKU geladen ist (Benutzer aktiv angemeldet)
+    if (Test-Path "Registry::HKU\$sid") {
+        Write-Log "[SYS.2.2.3.A4] Hive geladen: $sid ($profilePath)"
+    }
+    elseif (Test-Path $ntUserDat) {
+        # Hive temporär laden
+        $null = & reg load "HKU\$sid" $ntUserDat 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $hiveMounted = $true
+            Write-Log "[SYS.2.2.3.A4] Hive gemountet: $sid ($profilePath)"
+        }
+        else {
+            Write-Log "[SYS.2.2.3.A4] WARNUNG: Hive konnte nicht geladen werden: $ntUserDat"
+            continue
+        }
+    }
+    else {
+        Write-Log "[SYS.2.2.3.A4] ÜBERSPRUNGEN: NTUSER.DAT nicht gefunden für $sid"
+        continue
+    }
+
+    try {
+        $regPath = "Registry::HKU\$sid\$explorerAdvKey"
+        if (-not (Test-Path $regPath)) {
+            New-Item -Path $regPath -Force | Out-Null
+        }
+        $old = (Get-ItemProperty -Path $regPath -Name 'HideFileExt' -ErrorAction SilentlyContinue).HideFileExt
+        Set-ItemProperty -Path $regPath -Name 'HideFileExt' -Value 0 -Type DWord -Force
+        Write-Log "[SYS.2.2.3.A4] GESETZT HideFileExt = 0 (war: $old) für SID $sid"
+    }
+    finally {
+        # Hive wieder entladen wenn wir ihn geladen haben
+        if ($hiveMounted) {
+            [GC]::Collect()
+            $null = & reg unload "HKU\$sid" 2>&1
+        }
+    }
+}
+
+# --- c) Default-User-Profil (gilt für alle neuen Benutzerkonten) ---
+$defaultHivePath = 'C:\Users\Default\NTUSER.DAT'
+if (Test-Path $defaultHivePath) {
+    $null = & reg load 'HKU\DefaultUserTemp' $defaultHivePath 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        try {
+            $defPath = "Registry::HKU\DefaultUserTemp\$explorerAdvKey"
+            if (-not (Test-Path $defPath)) {
+                New-Item -Path $defPath -Force | Out-Null
+            }
+            $old = (Get-ItemProperty -Path $defPath -Name 'HideFileExt' -ErrorAction SilentlyContinue).HideFileExt
+            Set-ItemProperty -Path $defPath -Name 'HideFileExt' -Value 0 -Type DWord -Force
+            Write-Log "[SYS.2.2.3.A4] GESETZT HideFileExt = 0 (war: $old) im Default-User-Profil"
+        }
+        finally {
+            [GC]::Collect()
+            $null = & reg unload 'HKU\DefaultUserTemp' 2>&1
+        }
+    }
+    else {
+        Write-Log "[SYS.2.2.3.A4] WARNUNG: Default-User-Hive konnte nicht geladen werden."
+    }
+}
+else {
+    Write-Log "[SYS.2.2.3.A4] WARNUNG: Default-User-Profil nicht gefunden: $defaultHivePath"
+}
 
 
 # =============================================================================
